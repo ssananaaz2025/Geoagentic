@@ -1,90 +1,165 @@
-﻿# GeoAgentic — Emergency Vehicle Control Room
+<div align="center">
 
-GeoAgentic is a Bengaluru-focused emergency dispatch demo that combines a React frontend, a FastAPI backend, and a SQLite-backed decision engine to simulate real-time vehicle routing, incident handling, and operator recommendations.
+# 🚑 GeoAgentic
 
-It is designed to show how a dispatch control room can:
-- monitor multiple emergency vehicles,
-- create missions and routes,
-- inject incidents (accident, traffic, flood, roadblock, hazard, etc.),
-- trigger GeoAgent decision logic,
-- allow a human dispatcher to approve or reject reroutes.
+### Emergency Vehicle Routing & Decision Support
 
-This project is a working demo and is intentionally scoped to a Bengaluru urban bounding box for validation and realistic route logic.
+**Monitor incidents · Compare routes · Explain decisions · Keep humans in control**
 
-## What this app does
+[![React](https://img.shields.io/badge/Frontend-React-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org/)
+[![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?logo=sqlite&logoColor=white)](https://sqlite.org/)
 
-The product contains three primary dashboards:
-- Control Room: multi-vehicle dispatch and incident management
-- Driver: per-vehicle mission view and status
-- Admin: system health, routing status, and fleet data
+</div>
 
-The app supports:
-- live-ish vehicle simulation,
-- route generation and ETA calculation,
-- incident-to-recommendation workflow,
-- suggestion acceptance or dismissal,
-- fallback behavior when external APIs are unavailable.
+---
 
-## Architecture overview
+## 🧭 Quick navigation
 
-### 1. Frontend
-Location: `frontend/`
+Click a section to jump directly to it.
 
-Technology:
-- React 18
-- Vite
-- Leaflet + react-leaflet
-- CSS
+- [🎯 Project overview](#-project-overview)
+- [🤖 How the multi-agent system works](#-how-the-multi-agent-system-works)
+- [🔄 End-to-end workflow](#-end-to-end-workflow)
+- [🖥️ Dashboards](#️-dashboards)
+- [🧰 Technology stack](#-technology-stack)
+- [📁 Project structure](#-project-structure)
+- [🚀 Run locally](#-run-locally)
+- [🔌 Optional API integrations](#-optional-api-integrations)
+- [🧪 Testing](#-testing)
+- [⚠️ Scope and limitations](#️-scope-and-limitations)
+- [🔭 Future improvements](#-future-improvements)
 
-Responsibilities:
-- landing page and role picker,
-- three dashboards,
-- map rendering and route drawing,
-- mission creation,
-- incident injection,
-- live UI updates from backend state.
+---
 
-### 2. Backend
-Location: `backend/app/`
+## 🎯 Project overview
 
-Technology:
-- FastAPI
-- SQLAlchemy
-- Pydantic
-- SQLite by default
+GeoAgentic is a Bengaluru-focused emergency dispatch demo. It demonstrates how a **multi-agent workflow** can help a dispatcher respond when an emergency vehicle's route is affected by traffic, accidents, flooding, roadblocks, or other hazards.
 
-Main modules:
-- `main.py`: API entrypoint, startup hooks, background simulation loop
-- `config.py`: environment variables and integration toggles
-- `database.py`: database engine and SQLite migration logic
-- `models.py`: database schema and entities
-- `schemas.py`: request/response validation
-- `routing.py`: route generation and route resolution
-- `decision_engine.py`: rule-based recommendation logic
-- `simulation.py`: simulated GPS movement and mission progression
-- `traffic_monitor.py`: route incident checks
-- `agents.py`: LangGraph-based decision workflow
-- `live.py`: live traffic and map data access
-- `places.py`: built-in place dataset
+Instead of only showing a map, GeoAgentic connects incident monitoring, route analysis, decision support, and explanations in one workflow. A human dispatcher reviews the recommendation and can approve or dismiss a proposed reroute.
 
-### 3. Data layer
-- Default database: SQLite file at `backend/geoagentic.db`
-- Database URL can be overridden through `DATABASE_URL`
-- `schema.sql` at the project root contains the portable DDL reference
+### 💡 The problem it addresses
 
-### 4. External integrations (optional)
-The app works without any external keys. When keys are not configured, it falls back to mock routing and templated explanations.
+An emergency vehicle's original route may become unsuitable while it is travelling. Dispatchers need to know:
 
-Optional services:
-- Google Maps Directions API for real road routes
-- OSRM (OpenStreetMap) for route alternatives
-- Anthropic Claude for explanation phrasing
-- TomTom for live incident monitoring
+- 📍 What incident is affecting the route?
+- 🛣️ Are alternative routes available?
+- ⏱️ How do the available routes compare in ETA and distance?
+- 🧠 Should the vehicle continue or should a reroute be recommended?
+- 🗣️ Why is the system recommending this action?
 
-## Project structure
+GeoAgentic demonstrates a workflow for answering these questions using available route and incident data.
+
+## 🤖 How the multi-agent system works
+
+**This is the main part of GeoAgentic.** One Orchestrator Agent coordinates four specialised agents. Each has a separate responsibility and contributes to the final recommendation.
+
+| Agent | What it does | What it produces |
+|---|---|---|
+| 🧭 **1. Orchestrator Agent** | Coordinates the mission workflow, starts the required stages, tracks progress, and combines results. | Coordinated workflow and final response |
+| 🚨 **2. Incident Monitoring Agent** | Checks for incidents that may affect the active route. TomTom live data is available when configured; fallback/demo data may be used otherwise. | Relevant incident details |
+| 🛣️ **3. Route Analysis Agent** | Examines the current route and available alternatives. Compares returned ETA, distance, and feasibility information. | Route options and comparison |
+| ⚖️ **4. Decision-Making Agent** | Uses incident and route results with the implemented decision rules to recommend continuing or rerouting. | Continue/reroute recommendation |
+| 💬 **5. Explanation Agent** | Presents the recommendation in understandable language and explains its supporting reasons when available. | Human-readable explanation |
+
+> **Keep the roles clear:** the Orchestrator coordinates; Incident Monitoring checks incidents; Route Analysis compares routes; Decision-Making recommends an action; Explanation communicates the reason.
+
+The application also has a **rule-based decision engine**. The agent workflow coordinates the stages, while the implemented rules and available data determine the recommendation. Optional Claude integration may improve explanation wording; not every agent should be described as an independent AI language model.
+
+### 🗺️ Architecture at a glance
+
+```mermaid
+flowchart TD
+    OP[🧑‍✈️ Dispatcher creates mission]
+    UI[🖥️ React Frontend and Map]
+    API[⚙️ FastAPI Backend]
+    ORCH[🧭 1. Orchestrator Agent]
+    IM[🚨 2. Incident Monitoring Agent]
+    RA[🛣️ 3. Route Analysis Agent]
+    DM[⚖️ 4. Decision-Making Agent]
+    EX[💬 5. Explanation Agent]
+    RULES[Rule-Based Decision Engine]
+    TOM[TomTom Incidents API<br/>Optional]
+    ROUTE[Google Maps / OSRM<br/>Optional]
+    DB[(🗄️ SQLite)]
+    HUMAN{Dispatcher approves?}
+
+    OP --> UI --> API
+    API <--> DB
+    API --> ORCH
+    ORCH --> IM
+    IM <--> TOM
+    IM --> RA
+    RA <--> ROUTE
+    RA --> DM
+    DM <--> RULES
+    DM --> EX
+    EX --> ORCH
+    ORCH --> API
+    API --> UI
+    UI --> HUMAN
+    HUMAN -->|Approve| UPDATE[Update mission and route]
+    HUMAN -->|Dismiss| KEEP[Keep current route]
+    UPDATE --> DB
+    KEEP --> DB
+```
+
+### 🔍 Agent hand-off: a simple example
+
+Imagine an ambulance is travelling to a hospital and a roadblock is reported.
+
+1. 🧭 **Orchestrator:** starts the incident-aware evaluation for the ambulance mission.
+2. 🚨 **Incident Monitoring:** identifies the roadblock as potentially relevant to the active route.
+3. 🛣️ **Route Analysis:** requests and compares available route alternatives.
+4. ⚖️ **Decision-Making:** evaluates the returned information using the implemented decision logic.
+5. 💬 **Explanation:** describes why an alternative may be preferable, based on available evidence.
+6. 🧑‍✈️ **Dispatcher:** reviews the suggestion and approves or dismisses it.
+7. 🔄 **Application:** updates the mission state if the reroute is approved.
+
+The example illustrates the intended workflow. The actual result depends on the incident data, routing provider, and current implementation.
+
+## 🔄 End-to-end workflow
+
+**Mission → Incidents → Route analysis → Decision → Explanation → Human approval → Update**
+
+| Step | Action |
+|---|---|
+| **1. 📝 Mission request** | Operator selects a vehicle, origin, destination, and priority. |
+| **2. 🚨 Fetch incidents** | Incident Monitoring checks for route-relevant incidents. |
+| **3. 🛣️ Analyse routes** | Route Analysis compares available route options. |
+| **4. ⚖️ Make decision** | Decision-Making recommends continuing or rerouting. |
+| **5. 💬 Explain** | Explanation Agent prepares a readable reason. |
+| **6. 👀 Review** | The control room displays the recommendation. |
+| **7. ✅ Approve or dismiss** | The dispatcher decides whether to accept the proposed reroute. |
+| **8. 🔄 Update** | The application updates the mission when approved and continues the demo simulation. |
+
+## 🖥️ Dashboards
+
+- 🧑‍✈️ **Control Room:** create missions, monitor vehicles and incidents, review recommendations, and approve or dismiss reroutes.
+- 🚑 **Driver:** view the assigned mission, route, vehicle status, and updates.
+- 🛠️ **Admin:** review fleet information, system health, routing status, and available logs.
+
+## 🧰 Technology stack
+
+| Area | Technology | Purpose |
+|---|---|---|
+| 🖥️ Frontend | React 18, Vite, JavaScript, CSS | Dashboards and user interaction |
+| 🗺️ Mapping | Leaflet, React-Leaflet | Map and route visualisation |
+| ⚙️ Backend | FastAPI, Uvicorn | API and backend operations |
+| ✅ Validation | Pydantic | Validate API requests and responses |
+| 🗄️ Data access | SQLAlchemy, SQLite | Store and access demo application data |
+| 🤖 Agent workflow | LangGraph-based workflow | Coordinate specialised decision stages |
+| 🧠 Decision logic | Python rule-based engine | Support continue/reroute decisions |
+| 🚨 Incidents | TomTom API (optional) | Live traffic incidents when configured |
+| 🛣️ Routing | Google Maps Directions / OSRM (optional) | Routes and alternatives |
+| 💬 Explanation | Templates; Claude optional | Operator-readable explanations |
+| 🧪 Testing | pytest | Backend tests |
+
+## 📁 Project structure
 
 ```text
-geoagentic/
+Geoagentic/
 ├── README.md
 ├── schema.sql
 ├── start.bat
@@ -94,211 +169,189 @@ geoagentic/
 │   ├── requirements.txt
 │   ├── geoagentic.db
 │   ├── app/
+│   │   ├── main.py             # FastAPI entry point
+│   │   ├── config.py           # Environment settings
+│   │   ├── database.py         # Database setup
+│   │   ├── models.py           # Database entities
+│   │   ├── schemas.py          # API validation schemas
+│   │   ├── routing.py          # Route generation
+│   │   ├── decision_engine.py  # Decision rules
+│   │   ├── simulation.py       # Vehicle movement
+│   │   ├── traffic_monitor.py  # Incident checks
+│   │   ├── agents.py           # Agent workflow
+│   │   ├── live.py             # Live map/traffic access
+│   │   └── places.py           # Built-in place data
 │   └── tests/
-├── frontend/
-│   ├── package.json
-│   ├── src/
-│   └── node_modules/
-└── .gitignore
+└── frontend/
+    ├── package.json
+    └── src/
 ```
 
-## Prerequisites
+## 🚀 Run locally
 
-Before running the app:
+### ✅ Requirements
+
 - Python 3.10+
 - Node.js 18+
 - npm
-- A terminal such as PowerShell, Command Prompt, or Bash
 
-## Environment setup
+### 1. 📥 Clone the repository
 
-### 1. Backend environment
-From the project root:
+```bash
+git clone https://github.com/ssananaaz2025/Geoagentic.git
+cd Geoagentic
+```
 
-Windows PowerShell:
+### 2. 🐍 Set up the backend
+
+**Windows PowerShell**
+
 ```powershell
-cd .\geoagentic\backend
+cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-Linux/macOS:
-```bash
-cd geoagentic/backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 2. Create environment file
-```bash
-cp .env.example .env
-```
-
-On Windows PowerShell:
-```powershell
 Copy-Item .env.example .env
 ```
 
-Edit the `.env` file if you want to enable external integrations.
+**Linux / macOS**
 
-Example environment variables:
-```env
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+### 3. ▶️ Start the backend
+
+Run from the `backend` directory:
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+- 📘 API documentation: http://127.0.0.1:8000/docs
+- ❤️ Health check: http://127.0.0.1:8000/api/health
+- 🔌 Configuration status: http://127.0.0.1:8000/api/config/status
+
+Check these endpoints against the version you are running.
+
+### 4. 🌐 Start the frontend
+
+Open a **second terminal**:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local URL shown by Vite, commonly http://localhost:5173.
+
+### ⚡ Optional: helper scripts
+
+From the project root:
+
+**Windows**
+```powershell
+.\start.bat
+```
+
+**Linux / macOS**
+```bash
+chmod +x ./start.sh
+./start.sh
+```
+
+## 🔌 Optional API integrations
+
+GeoAgentic is designed to run with fallback behaviour when external keys are not configured. Live results depend on valid credentials, provider availability, and the current implementation.
+
+Edit `backend/.env`:
+
+```dotenv
 DATABASE_URL=sqlite:///geoagentic.db
+
 GOOGLE_MAPS_API_KEY=
 GOOGLE_MAPS_REGION=in
+TOMTOM_API_KEY=
 ANTHROPIC_API_KEY=
 CLAUDE_MODEL=claude-sonnet-5-5
-TOMTOM_API_KEY=
+
 ROUTING_PROVIDER=auto
 OSRM_BASE_URL=https://router.project-osrm.org
 GOOGLE_MAPS_TIMEOUT_S=3
 OSRM_TIMEOUT_S=2.5
 ```
 
-Notes:
-- If the keys are empty, the app still runs using fallback mock data.
-- The app validates all coordinates against Bengaluru bounds.
-- `auto` tries Google Maps first, then OSRM, then mock routes. Provider requests
-  have short configurable timeouts so a slow API is less likely to delay dispatch.
+Use the exact variable names supported by your current `.env.example` and `config.py`.
 
-## How to run the app
+- 🚨 **TomTom:** live traffic incident retrieval when configured and implemented.
+- 🗺️ **Google Maps:** road-route results when configured and available.
+- 🛣️ **OSRM:** alternative routing service.
+- 💬 **Claude:** optional explanation phrasing.
 
-### Option A: Run backend and frontend manually
+The documented intended `auto` routing order is Google Maps → OSRM → mock route fallback. Confirm this behaviour in the version you run.
 
-#### Backend
+🔐 **Security:** never commit real API keys. Keep them in your local `.env` file and ensure `.env` is excluded by `.gitignore`.
+
+## 🧪 Testing
+
+From the `backend` directory, with the virtual environment active:
+
 ```bash
-cd geoagentic/backend
-source .venv/bin/activate    # or .\.venv\Scripts\Activate.ps1 on Windows
-uvicorn app.main:app --reload --port 8000
-```
-
-Then open:
-- API docs: http://127.0.0.1:8000/docs
-- Health endpoint: http://127.0.0.1:8000/api/health
-- Config status: http://127.0.0.1:8000/api/config/status
-
-#### Frontend
-Open a second terminal:
-```bash
-cd geoagentic/frontend
-npm install
-npm run dev -- --host 0.0.0.0
-```
-
-Open in browser:
-- http://localhost:5173
-
-If port 5173 is already occupied, Vite will automatically choose another open port, such as 5174.
-
-### Option B: Run both with helper scripts
-
-Windows:
-```powershell
-cd geoagentic
-start.bat
-```
-
-Linux/macOS:
-```bash
-cd geoagentic
-chmod +x start.sh
-./start.sh
-```
-
-## Working API and app behavior
-
-The app starts with demo emergency vehicles seeded into the database:
-- AMB-01
-- FIRE-01
-- POL-01
-- AMB-02
-
-Supported workflow:
-1. Create or select a vehicle.
-2. Create a mission with origin and destination.
-3. Select a route.
-4. Inject an incident such as accident, flood, traffic, or hazard.
-5. GeoAgent evaluates the route and suggests a reroute if needed.
-6. Dispatcher approves or dismisses the suggestion.
-
-## Optional external API configuration
-
-### Google Maps
-Set:
-```env
-GOOGLE_MAPS_API_KEY=your_key_here
-GOOGLE_MAPS_REGION=in
-```
-This enables real route generation and traffic-aware ETAs.
-Google is tried before OSRM in `auto` mode. If a request is slow or fails, the
-backend continues to the configured fallback instead of waiting for the previous
-six-second default timeout. Tune the limit with `GOOGLE_MAPS_TIMEOUT_S` (default
-3 seconds).
-
-### Anthropic Claude
-Set:
-```env
-ANTHROPIC_API_KEY=your_key_here
-CLAUDE_MODEL=claude-sonnet-5-5
-```
-This improves explanation text for recommendations.
-
-### TomTom
-Set:
-```env
-TOMTOM_API_KEY=your_key_here
-```
-This enables live traffic monitoring and route-scoped incident checks.
-
-### OSRM
-Set:
-```env
-ROUTING_PROVIDER=osrm
-OSRM_BASE_URL=https://router.project-osrm.org
-```
-OSRM can be used as a no-key fallback route provider if Google Maps is not configured.
-Its request timeout defaults to 2.5 seconds (`OSRM_TIMEOUT_S`). In `auto` mode
-this runs only after Google does not return routes.
-
-## Troubleshooting
-
-### Backend offline
-The frontend may show a red backend offline banner if FastAPI is not running.
-Fix:
-```bash
-cd geoagentic/backend
-source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
-```
-
-### Port already in use
-If 5173 is busy, Vite will move to another port such as 5174.
-Use the URL shown in the terminal.
-
-### Routes look like curves instead of road-following lines
-This usually means the routing API is unavailable or disabled.
-The app will fallback automatically to its mock route generator.
-
-### Place search returns limited results
-The app includes built-in place data and can fall back to offline results if the online geocoder is not available.
-
-### Duplicate vehicle names
-Vehicle callsigns must be unique. Use a different callsign if the app reports a duplicate vehicle error.
-
-## Validation / testing
-
-Run backend tests:
-```bash
-cd geoagentic/backend
-source .venv/bin/activate
 pytest -q
 ```
 
-This validates the route generation and agent behaviors in the offline test suite.
+### Suggested scenarios to validate
 
-## Notes
-- The demo is intended for local development and simulation, not production dispatch operations.
-- The project is bounded to Bengaluru coordinates for consistency and demo realism.
-- All external APIs are optional; the application remains functional without them.
+- [ ] 📝 Create a mission and confirm it appears in the control room.
+- [ ] 🚨 Inject an accident, traffic, flood, or roadblock.
+- [ ] 🔎 Check whether incident monitoring identifies relevant incidents.
+- [ ] 🛣️ Verify route alternatives or fallback behaviour.
+- [ ] ⚖️ Review the continue/reroute recommendation.
+- [ ] 💬 Check that the explanation matches the decision.
+- [ ] ✅ Approve a reroute and verify the mission state changes.
+- [ ] ❌ Dismiss a recommendation and verify it is not accepted as a reroute.
+- [ ] 🔌 Disable API keys and verify fallback behaviour.
+
+Only mark a scenario as passed after testing it against the current code.
+
+## ⚠️ Scope and limitations
+
+- 📍 The demo validates coordinates within a Bengaluru-area boundary.
+- 🚗 Vehicle movement and some incidents can be simulated.
+- 🌐 Live incidents and road routes depend on external providers.
+- 🗺️ Mock routes may not follow real roads or live traffic.
+- ⏱️ ETA and route feasibility are estimates.
+- 🧠 Decision quality depends on available data and implemented rules.
+- 💬 Optional language-model explanations may be incomplete or incorrect.
+
+**GeoAgentic is a development and research demo, not a production emergency-dispatch system. Do not use it to direct real emergency vehicles.**
+
+## 🔭 Future improvements
+
+- 📊 Measure time from incident detection to recommendation.
+- 🛣️ Compare route and ETA quality against a baseline.
+- 🧪 Compare multi-agent workflow results with a single rule-based pipeline.
+- 🧾 Record agent inputs, outputs, traces, and failures for reproducible research.
+- 🎯 Evaluate recommendation correctness across controlled scenarios.
+- 🛡️ Improve confidence reporting and handling of missing or stale incident data.
+
+These are possible future extensions, not claims of existing functionality.
+
+---
+
+## 🔗 Repository
+
+**GeoAgentic — Emergency Vehicle Control Room**
+
+[github.com/ssananaaz2025/Geoagentic](https://github.com/ssananaaz2025/Geoagentic)
+
+<div align="center">
+
+**🚨 Monitor incidents · 🛣️ Compare routes · 💬 Explain decisions · 🧑‍✈️ Keep the dispatcher in control**
+
+</div>
